@@ -63,7 +63,11 @@ const Sidebar: React.FC = () => {
     if (room.roomType === 'group') {
       return '👥';
     }
-    const otherParticipant = room.participants.find(p => p.id !== user?.id);
+    const currentUserId = user?.id || user?._id;
+    const otherParticipant = room.participants.find(p => {
+      const participantId = p.id || p._id;
+      return participantId !== currentUserId;
+    });
     return otherParticipant?.avatar || '👤';
   };
 
@@ -113,7 +117,7 @@ const Sidebar: React.FC = () => {
               >
                 <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center mr-3 animate-pulse">
                   <span className="text-sm font-medium text-white">
-                    {user.avatar || user.username.charAt(0).toUpperCase()}
+                    {user.avatar || user.username?.charAt(0).toUpperCase() || 'U'}
                   </span>
                 </div>
                 <div className="flex-1 text-left">
@@ -151,8 +155,9 @@ const Sidebar: React.FC = () => {
                     : 'hover:bg-gray-800'
                 } ${
                   room.lastMessage && !room.lastMessage.isRead && 
-                  (room.lastMessage.sender.id !== user?.id && room.lastMessage.sender._id !== user?.id) &&
-                  (room.lastMessage.sender.id !== user?._id && room.lastMessage.sender._id !== user?._id)
+                  room.lastMessage.sender && 
+                  ((room.lastMessage.sender.id !== user?.id && room.lastMessage.sender._id !== user?.id) &&
+                   (room.lastMessage.sender.id !== user?._id && room.lastMessage.sender._id !== user?._id))
                     ? 'bg-gray-800 border-l-2 border-blue-400'
                     : ''
                 }`}
@@ -183,8 +188,9 @@ const Sidebar: React.FC = () => {
                     </p>
                   )}
                   {room.lastMessage && !room.lastMessage.isRead && 
-                   (room.lastMessage.sender.id !== user?.id && room.lastMessage.sender._id !== user?.id) &&
-                   (room.lastMessage.sender.id !== user?._id && room.lastMessage.sender._id !== user?._id) && (
+                   room.lastMessage.sender && 
+                   ((room.lastMessage.sender.id !== user?.id && room.lastMessage.sender._id !== user?.id) &&
+                    (room.lastMessage.sender.id !== user?._id && room.lastMessage.sender._id !== user?._id)) && (
                     <div className="w-2 h-2 bg-blue-500 rounded-full ml-auto animate-pulse"></div>
                   )}
                 </div>

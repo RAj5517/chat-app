@@ -153,12 +153,48 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       setLoading(true);
       const response = await axios.get('/chat/rooms');
-      setRooms(response.data);
+      const roomsData = response.data;
+      
+      // Clean up duplicate rooms - keep only the most recent room between any two users
+      const cleanedRooms = cleanDuplicateRooms(roomsData);
+      setRooms(cleanedRooms);
     } catch (error: any) {
       console.error('Error fetching rooms:', error);
     } finally {
       setLoading(false);
     }
+  };
+
+  const cleanDuplicateRooms = (roomsData: Room[]) => {
+    const currentUserId = user?.id || user?._id;
+    const roomMap = new Map();
+    
+    roomsData.forEach(room => {
+      if (room.roomType !== 'private' || room.participants.length !== 2) {
+        // Keep group rooms and invalid private rooms as-is
+        roomMap.set(room._id, room);
+        return;
+      }
+      
+      // Create a unique key for the two participants
+      const participants = room.participants.map(p => p.id || p._id).sort();
+      const roomKey = participants.join('-');
+      
+      if (!roomMap.has(roomKey)) {
+        roomMap.set(roomKey, room);
+      } else {
+        // Keep the room with the most recent activity
+        const existingRoom = roomMap.get(roomKey);
+        const existingDate = new Date(existingRoom.updatedAt || existingRoom.createdAt);
+        const currentDate = new Date(room.updatedAt || room.createdAt);
+        
+        if (currentDate > existingDate) {
+          roomMap.set(roomKey, room);
+        }
+      }
+    });
+    
+    return Array.from(roomMap.values());
   };
 
   const fetchUsers = async () => {
@@ -234,16 +270,47 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const createRoom = async (participantId: string) => {
     try {
-      console.log('Creating room with participantId:', participantId);
+      console.log('🔍 Checking for existing room with participantId:', participantId);
+      
+      // First, check if a room already exists with this participant
+      const currentUserId = user?.id || user?._id;
+      const existingRoom = rooms.find(room => {
+        if (room.roomType !== 'private') return false;
+        
+        // Check if this room has exactly 2 participants: current user and the selected participant
+        if (room.participants.length !== 2) return false;
+        
+        const hasCurrentUser = room.participants.some(p => {
+          const participantId = p.id || p._id;
+          return participantId === currentUserId;
+        });
+        
+        const hasSelectedUser = room.participants.some(p => {
+          const pId = p.id || p._id;
+          return pId === participantId;
+        });
+        
+        return hasCurrentUser && hasSelectedUser;
+      });
+      
+      if (existingRoom) {
+        console.log('✅ Found existing room:', existingRoom._id);
+        console.log('🔄 Opening existing room instead of creating new one');
+        setCurrentRoom(existingRoom);
+        return;
+      }
+      
+      console.log('📝 No existing room found, creating new room with participantId:', participantId);
       const response = await axios.post('/chat/room', {
         participantId
       });
       
       const newRoom = response.data;
+      console.log('✅ New room created:', newRoom._id);
       setRooms(prev => [newRoom, ...prev]);
       setCurrentRoom(newRoom);
     } catch (error: any) {
-      console.error('Error creating room:', error);
+      console.error('❌ Error creating room:', error);
       console.error('Error details:', error.response?.data);
       throw error;
     }
