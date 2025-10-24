@@ -39,11 +39,14 @@ io.on('connection', (socket) => {
 
   // Send message
   socket.on('send-message', (data) => {
-    console.log('Broadcasting message to room:', data.roomId);
-    // Broadcast to all users in the room except sender
-    socket.to(data.roomId).emit('receive-message', data.message);
-    // Also emit to sender for confirmation
-    socket.emit('receive-message', data.message);
+    console.log('📤 Server received send-message event');
+    console.log('📤 Room ID:', data.roomId);
+    console.log('📤 Message:', data.message);
+    console.log('📤 Broadcasting to room:', data.roomId);
+    
+    // Broadcast to all users in the room (including sender for confirmation)
+    io.to(data.roomId).emit('receive-message', data.message);
+    console.log('✅ Message broadcasted to room:', data.roomId);
   });
 
   // Leave room

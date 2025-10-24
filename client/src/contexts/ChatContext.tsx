@@ -63,7 +63,25 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         console.log('✅ Message room ID:', message.roomId);
         console.log('✅ Message content:', message.content);
         
-        // Always add message to current room if it's the active room
+        // Update rooms list to show new message and move to top
+        setRooms(prev => {
+          const updatedRooms = prev.map(room => 
+            room._id === message.roomId 
+              ? { ...room, lastMessage: message, updatedAt: new Date().toISOString() }
+              : room
+          );
+          
+          // Move the room with new message to the top
+          const roomWithNewMessage = updatedRooms.find(room => room._id === message.roomId);
+          if (roomWithNewMessage) {
+            const otherRooms = updatedRooms.filter(room => room._id !== message.roomId);
+            return [roomWithNewMessage, ...otherRooms];
+          }
+          
+          return updatedRooms;
+        });
+        
+        // Add message to current room if it's the active room
         if (currentRoomRef.current && currentRoomRef.current._id === message.roomId) {
           console.log('✅ Adding message to current room - REAL-TIME UPDATE');
           setMessages(prev => {
@@ -84,53 +102,8 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             return newMessages;
           });
         } else {
-          console.log('⚠️ Message not for current room, but will update rooms list');
-          // Even if not current room, add message if it's for any of our rooms
-          setMessages(prev => {
-            const exists = prev.some(msg => msg._id === message._id || 
-              (msg.content === message.content && msg.createdAt === message.createdAt));
-            if (!exists) {
-              console.log('✅ Adding message to messages list for future display');
-              return [...prev, message];
-            }
-            return prev;
-          });
+          console.log('⚠️ Message not for current room, will be loaded when room is opened');
         }
-        
-        
-        // Force re-render to ensure messages are displayed in chat area
-        setTimeout(() => {
-          setMessages(prev => {
-            console.log('🔄 Force re-render - Current messages count:', prev.length);
-            return [...prev];
-          });
-        }, 100);
-        
-        // Additional force update after a longer delay
-        setTimeout(() => {
-          setMessages(prev => {
-            console.log('🔄 Second force re-render - Current messages count:', prev.length);
-            return [...prev];
-          });
-        }, 500);
-        
-        // Update rooms list to show new message and move to top
-        setRooms(prev => {
-          const updatedRooms = prev.map(room => 
-            room._id === message.roomId 
-              ? { ...room, lastMessage: message, updatedAt: new Date().toISOString() }
-              : room
-          );
-          
-          // Move the room with new message to the top
-          const roomWithNewMessage = updatedRooms.find(room => room._id === message.roomId);
-          if (roomWithNewMessage) {
-            const otherRooms = updatedRooms.filter(room => room._id !== message.roomId);
-            return [roomWithNewMessage, ...otherRooms];
-          }
-          
-          return updatedRooms;
-        });
       });
 
       newSocket.on('user-online', (userId: string) => {
@@ -207,28 +180,40 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const sendMessage = async (content: string, roomId: string) => {
-    if (!socket || !user) return;
+    if (!socket || !user) {
+      console.error('❌ Cannot send message - socket or user not available');
+      console.error('Socket:', socket);
+      console.error('User:', user);
+      return;
+    }
 
     try {
+      console.log('📤 Sending message:', content, 'to room:', roomId);
+      console.log('📤 Socket connected:', socket.connected);
+      console.log('📤 Socket ID:', socket.id);
+      
       const response = await axios.post('/chat/messages', {
         roomId,
         content
       });
 
       const message = response.data;
-      console.log('📤 Message sent:', message);
+      console.log('📤 Message sent successfully:', message);
       console.log('📤 Message sender ID:', message.sender.id || message.sender._id);
       console.log('📤 Current user ID:', user.id || user._id);
       console.log('📤 Message sender username:', message.sender.username);
       console.log('📤 Current user username:', user.username);
       
       // Add message to local state immediately
-      setMessages(prev => [...prev, message]);
+      setMessages(prev => {
+        console.log('📤 Adding message to local state');
+        return [...prev, message];
+      });
       
       // Update rooms list with new message
       setRooms(prev => prev.map(room => 
         room._id === roomId 
-          ? { ...room, lastMessage: message }
+          ? { ...room, lastMessage: message, updatedAt: new Date().toISOString() }
           : room
       ));
       
@@ -242,7 +227,8 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       console.log('✅ Message emitted via socket');
       
     } catch (error: any) {
-      console.error('Error sending message:', error);
+      console.error('❌ Error sending message:', error);
+      console.error('Error details:', error.response?.data);
     }
   };
 
